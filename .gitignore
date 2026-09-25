@@ -9,16 +9,16 @@ __pycache__/
 venv/
 
 # Flutter / Dart build output (build/ alone is ~960 MB)
-driver_app/build/
-driver_app/.dart_tool/
-driver_app/.flutter-plugins
-driver_app/.flutter-plugins-dependencies
-driver_app/android/.gradle/
-driver_app/android/.kotlin/
-driver_app/android/local.properties
-driver_app/android/app/debug/
-driver_app/android/app/profile/
-driver_app/android/app/release/
+apps/emergency-driver/build/
+apps/emergency-driver/.dart_tool/
+apps/emergency-driver/.flutter-plugins
+apps/emergency-driver/.flutter-plugins-dependencies
+apps/emergency-driver/android/.gradle/
+apps/emergency-driver/android/.kotlin/
+apps/emergency-driver/android/local.properties
+apps/emergency-driver/android/app/debug/
+apps/emergency-driver/android/app/profile/
+apps/emergency-driver/android/app/release/
 **/*.iml
 
 # Editors
