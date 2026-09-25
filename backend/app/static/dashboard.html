@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ResQConnect — Control Center</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171b21; --panel-2:#1e242c; --line:#2a323c;
+    --ink:#e8edf3; --muted:#93a1b1; --accent:#4c9aff; --accent-ink:#04121f;
+    --ok:#3fb950; --warn:#d29922; --bad:#f85149; --info:#8b949e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  button{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--line);
+         background:var(--panel-2);color:var(--ink);padding:8px 12px}
+  button:hover{border-color:#3d4956}
+  button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+  button.danger{border-color:#5d2b2b;color:#ffb4ae}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  input,select,textarea{font:inherit;background:var(--panel-2);color:var(--ink);
+         border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%}
+  .hide{display:none!important}
+
+  #login{max-width:360px;margin:12vh auto;background:var(--panel);border:1px solid var(--line);
+         border-radius:10px;padding:24px}
+  #login h1{font-size:18px;margin:0 0 4px}
+  #login p{color:var(--muted);margin:0 0 18px;font-size:13px}
+  #login label{display:block;margin-bottom:12px;font-size:12px;color:var(--muted)}
+  #login button{width:100%;margin-top:6px}
+  #loginError{color:#ffb4ae;font-size:12px;min-height:16px;margin-top:10px}
+
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px;
+         background:var(--panel);border-bottom:1px solid var(--line)}
+  header h1{font-size:15px;margin:0;letter-spacing:.2px}
+  header .who{color:var(--muted);font-size:12px;margin-left:auto}
+  header .dot{width:8px;height:8px;border-radius:50%;background:var(--info);display:inline-block;margin-right:6px}
+
+  #board{display:grid;grid-template-columns:300px 1fr 340px;height:calc(100vh - 47px)}
+  #list,aside{overflow-y:auto;background:var(--panel);border-right:1px solid var(--line)}
+  aside{border-right:none;border-left:1px solid var(--line)}
+  #map{height:100%;background:#0b0e12}
+  .section{padding:12px 14px;border-bottom:1px solid var(--line)}
+  .section h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;
+              color:var(--muted);margin:0 0 10px;font-weight:600}
+  .empty{color:var(--muted);font-size:13px;padding:16px 14px}
+
+  .trip{padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+  .trip:hover{background:var(--panel-2)}
+  .trip.sel{background:#12212f;box-shadow:inset 3px 0 0 var(--accent)}
+  .trip .row1{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .trip .veh{font-weight:600}
+  .trip .meta{color:var(--muted);font-size:12px;margin-top:3px}
+  .tag{font-size:11px;padding:2px 7px;border-radius:99px;border:1px solid var(--line);
+       white-space:nowrap;background:var(--panel-2)}
+  .tag.ok{color:#7ee787;border-color:#2c5c34}
+  .tag.warn{color:#e3b341;border-color:#5c4a1a}
+  .tag.bad{color:#ff9c94;border-color:#5d2b2b}
+  .tag.info{color:var(--muted)}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px}
+  .kv dt{color:var(--muted)}
+  .kv dd{margin:0;font-variant-numeric:tabular-nums}
+
+  #feed{font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .ev{padding:7px 0;border-bottom:1px solid var(--line);color:var(--muted)}
+  .ev b{color:var(--ink);font-weight:600}
+  .ev.urgent b{color:#ffb4ae}
+  .ev time{color:#5c6b7a;font-size:11px}
+
+  .actions{display:grid;gap:8px}
+  .actions .split{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .slider{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+  .slider input{width:auto;flex:1;padding:0}
+  #mapNote{position:absolute;z-index:500;bottom:10px;left:10px;background:rgba(15,18,22,.9);
+           border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--muted)}
+  .wrap{position:relative;height:100%}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <h1>ResQConnect — Control Center</h1>
+  <p>Central traffic operator console</p>
+  <form id="loginForm">
+    <label>Operator ID<input name="username" autocomplete="username" value="operator_1" required></label>
+    <label>Password<input name="password" type="password" autocomplete="current-password" value="password" required></label>
+    <button class="primary" type="submit">Sign in</button>
+    <div id="loginError"></div>
+  </form>
+</div>
+
+<div id="console" class="hide">
+  <header>
+    <h1>ResQConnect — Control Center</h1>
+    <span class="tag info"><span class="dot" id="linkDot"></span><span id="linkText">connecting</span></span>
+    <span class="who" id="whoami"></span>
+    <button id="logout">Sign out</button>
+  </header>
+
+  <div id="board">
+    <div id="list">
+      <div class="section"><h2>Active emergency trips</h2>
+        <label style="font-size:12px;color:var(--muted)">Scope
+          <select id="scope">
+            <option value="active" selected>Active only</option>
+            <option value="all">All (last 50)</option>
+          </select>
+        </label>
+      </div>
+      <div id="trips"></div>
+    </div>
+
+    <div class="wrap">
+      <div id="map"></div>
+      <div id="mapNote">Waiting for a trip feed…</div>
+    </div>
+
+    <aside>
+      <div class="section"><h2>Trip detail</h2><div id="detail" class="empty">Select a trip.</div></div>
+      <div class="section"><h2>Priority junctions</h2><div id="junctions" class="empty">—</div></div>
+      <div class="section"><h2>Control actions</h2>
+        <div class="actions">
+          <button id="btnApprove" class="primary" disabled>Approve route</button>
+          <div class="slider">
+            <span>ETA ×</span>
+            <input id="etaScale" type="range" min="0.5" max="1.5" step="0.05" value="1">
+            <span id="etaScaleVal">1.00</span>
+          </div>
+          <input id="overrideReason" placeholder="Reason for override (e.g. accident on route)" disabled>
+          <button id="btnOverride" disabled>Override route</button>
+          <input id="msgText" placeholder="Message to driver" disabled>
+          <button id="btnMsg" disabled>Send message</button>
+          <input id="cancelReason" placeholder="Cancellation reason" value="Cancelled by control center" disabled>
+          <button id="btnCancel" class="danger" disabled>Cancel route</button>
+        </div>
+      </div>
+      <div class="section"><h2>Live feed</h2><div id="feed"></div></div>
+    </aside>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  const API = location.origin;
+  let token = sessionStorage.getItem("op_token") || "";
+  let me = null;
+  let trips = [];
+  let selected = null;
+  let socket = null;
+  let timer = null;
+  const markers = new Map();
+
+  const $ = (id) => document.getElementById(id);
+
+  const STATUS_LABEL = {
+    request_sent: "Request sent", request_received: "Request received",
+    route_calculating: "Calculating route", route_approved: "Route approved",
+    corridor_preparing: "Corridor preparing", corridor_active: "Corridor active",
+    rerouting: "Rerouting", completed: "Completed", cancelled: "Cancelled",
+  };
+  const STATUS_TONE = {
+    request_sent: "info", request_received: "info", route_calculating: "info",
+    route_approved: "ok", corridor_preparing: "warn", corridor_active: "ok",
+    rerouting: "warn", completed: "info", cancelled: "bad",
+  };
+  const JUNCTION_TONE = {
+    not_required: "info", preparing: "warn", scheduled: "info", active: "ok",
+    completed: "info", delayed: "warn", failed: "bad", cleared: "info", unknown: "info",
+  };
+  const label = (v) => (STATUS_LABEL[v] || v || "—").replace(/_/g, " ");
+
+  // FastAPI validation errors arrive as a detail array of {loc, msg}; the plain
+  // string form is used for everything else. Never show "[object Object]".
+  function detailText(detail, status) {
+    if (Array.isArray(detail)) {
+      return detail.map((d) => `${(d.loc || []).slice(1).join(".")}: ${d.msg}`).join("; ");
+    }
+    return detail || ("HTTP " + status);
+  }
+
+  async function api(path, opts = {}) {
+    const res = await fetch(API + path, {
+      ...opts,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: "Bearer " + token } : {}),
+        ...(opts.headers || {}),
+      },
+    });
+    if (res.status === 401) { signOut(); throw new Error("Session expired"); }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(detailText(body.detail, res.status));
+    return body;
+  }
+
+  // ---------- map ----------
+  const map = L.map("map", { zoomControl: true }).setView([12.9716, 77.5946], 12);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "&copy; OpenStreetMap",
+  }).addTo(map);
+  const routeLayer = L.layerGroup().addTo(map);
+
+  function vehicleIcon(trip) {
+    const tone = trip.priority === "critical" ? "#f85149"
+               : trip.priority === "high" ? "#d29922" : "#4c9aff";
+    return L.divIcon({
+      className: "", iconSize: [16, 16], iconAnchor: [8, 8],
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:${tone};
+             border:2px solid #0f1216;box-shadow:0 0 0 2px ${tone}55"></div>`,
+    });
+  }
+
+  function drawMap() {
+    const seen = new Set();
+    for (const t of trips) {
+      if (!t.fix) continue;
+      seen.add(t.trip_id);
+      const pos = [t.fix.latitude, t.fix.longitude];
+      const isSel = t.trip_id === selected;
+      let m = markers.get(t.trip_id);
+      if (!m) {
+        m = L.marker(pos, { icon: vehicleIcon(t) }).addTo(map);
+        markers.set(t.trip_id, m);
+      }
+      m.setLatLng(pos);
+      m.setIcon(vehicleIcon(t));
+      m.bindTooltip(
+        `${t.vehicle_number || t.vehicle_id} · ${label(t.priority)}\n${label(t.status)}` +
+        (t.fix.network_status !== "online" ? `\nNetwork: ${t.fix.network_status}` : ""),
+        { direction: "top" }
+      );
+      m.setZIndexOffset(isSel ? 1000 : 0);
+      m.off("click").on("click", () => select(t.trip_id));
+    }
+    for (const [id, m] of markers) {
+      if (!seen.has(id)) { map.removeLayer(m); markers.delete(id); }
+    }
+
+    routeLayer.clearLayers();
+    const t = trips.find((x) => x.trip_id === selected);
+    if (!t) { $("mapNote").textContent = "Waiting for a trip feed…"; return; }
+
+    if (t.route && t.route.geometry && t.route.geometry.length) {
+      L.polyline(t.route.geometry, { color: "#4c9aff", weight: 5, opacity: .85 }).addTo(routeLayer);
+      L.circleMarker(t.route.geometry.at(-1), {
+        radius: 7, color: "#3fb950", fillColor: "#3fb950", fillOpacity: .9,
+      }).bindTooltip("Destination: " + t.destination_name).addTo(routeLayer);
+    }
+    // Junction markers wait on the route agent sending junction coordinates;
+    // until then the junction table in the sidebar is the only honest view.
+    if (t.fix) map.panTo([t.fix.latitude, t.fix.longitude], { animate: false });
+    else if (t.route && t.route.geometry.length) map.fitBounds(t.route.geometry, { padding: [40, 40] });
+
+    const fix = t.fix;
+    $("mapNote").textContent = fix
+      ? `${t.vehicle_number || t.vehicle_id} · GPS ±${Math.round(fix.accuracy_m)} m · ` +
+        `${fix.network_status} · ${new Date(fix.timestamp).toLocaleTimeString()}`
+      : `${t.vehicle_number || t.vehicle_id} · no GPS fix received yet`;
+  }
+
+  // ---------- render ----------
+  function renderList() {
+    const box = $("trips");
+    if (!trips.length) { box.innerHTML = '<div class="empty">No trips in this scope.</div>'; return; }
+    box.innerHTML = trips.map((t) => `
+      <div class="trip ${t.trip_id === selected ? "sel" : ""}" data-id="${t.trip_id}">
+        <div class="row1">
+          <span class="veh">${t.vehicle_number || t.vehicle_id}</span>
+          <span class="tag ${STATUS_TONE[t.status] || "info"}">${label(t.status)}</span>
+        </div>
+        <div class="meta">${(t.emergency_type || "").replace(/_/g, " ")} · ${label(t.priority)} priority</div>
+        <div class="meta">${t.driver_name || t.driver_id} → ${t.destination_name}</div>
+        ${t.fix ? `<div class="meta">${Math.round(t.fix.speed_kmph)} km/h · GPS ±${Math.round(t.fix.accuracy_m)} m
+           ${t.fix.network_status !== "online" ? "· <b>" + t.fix.network_status + "</b>" : ""}</div>` : ""}
+      </div>`).join("");
+    for (const el of box.querySelectorAll(".trip")) {
+      el.onclick = () => select(el.dataset.id);
+    }
+  }
+
+  function fmtEta(s) {
+    if (s == null) return "—";
+    const m = Math.floor(s / 60), sec = Math.round(s % 60);
+    return m ? `${m} min ${String(sec).padStart(2, "0")} s` : `${sec} s`;
+  }
+  const fmtDist = (m) => (m == null ? "—" : m >= 1000 ? (m / 1000).toFixed(1) + " km" : Math.round(m) + " m");
+
+  function renderDetail() {
+    const t = trips.find((x) => x.trip_id === selected);
+    if (!t) { $("detail").className = "empty"; $("detail").textContent = "Select a trip."; return; }
+    $("detail").className = "";
+    const f = t.fix;
+    $("detail").innerHTML = `
+      <dl class="kv">
+        <dt>Vehicle</dt><dd>${t.vehicle_number || t.vehicle_id} (${(t.vehicle_type || "").replace(/_/g, " ")})</dd>
+        <dt>Driver</dt><dd>${t.driver_name || t.driver_id}</dd>
+        <dt>Type</dt><dd>${(t.emergency_type || "").replace(/_/g, " ")}</dd>
+        <dt>Priority</dt><dd>${label(t.priority)}</dd>
+        <dt>Destination</dt><dd>${t.destination_name}</dd>
+        <dt>Status</dt><dd><span class="tag ${STATUS_TONE[t.status] || "info"}">${label(t.status)}</span></dd>
+        <dt>Route ver</dt><dd>v${t.route_version}</dd>
+        <dt>ETA</dt><dd>${fmtEta(t.route && t.route.eta_seconds)}</dd>
+        <dt>Remaining</dt><dd>${fmtDist(t.remaining_m)}</dd>
+        <dt>Travelled</dt><dd>${fmtDist(t.distance_travelled_m)}</dd>
+        <dt>Elapsed</dt><dd>${fmtEta(t.elapsed_seconds)}</dd>
+        <dt>Incidents</dt><dd>${t.incident_count}</dd>
+        ${f ? `<dt>Speed</dt><dd>${Math.round(f.speed_kmph)} km/h</dd>
+        <dt>Heading</dt><dd>${f.heading == null ? "—" : Math.round(f.heading) + "°"}</dd>
+        <dt>GPS</dt><dd>±${Math.round(f.accuracy_m)} m (${f.source}, conf ${(+f.confidence).toFixed(2)})</dd>
+        <dt>Network</dt><dd>${f.network_status}</dd>
+        <dt>Battery</dt><dd>${f.battery_percent == null ? "—" : f.battery_percent + "%"}</dd>
+        <dt>Last fix</dt><dd>${new Date(f.timestamp).toLocaleTimeString()}</dd>` : ""}
+      </dl>`;
+  }
+
+  function renderJunctions() {
+    const t = trips.find((x) => x.trip_id === selected);
+    const js = (t && t.priority_junctions) || [];
+    if (!js.length) { $("junctions").className = "empty"; $("junctions").textContent = "No junction plan."; return; }
+    $("junctions").className = "";
+    $("junctions").innerHTML = `<table>
+      <thead><tr><th>Junction</th><th class="num">Arrival</th><th>Signal</th></tr></thead>
+      <tbody>${js.map((j) => `<tr>
+        <td>${j.junction_id}</td>
+        <td class="num">${fmtEta(j.arrival_in_seconds)}</td>
+        <td><span class="tag ${JUNCTION_TONE[j.signal_status] || "info"}">${label(j.signal_status)}</span></td>
+      </tr>`).join("")}</tbody></table>`;
+  }
+
+  function setActionsEnabled(on) {
+    for (const id of ["btnApprove", "btnOverride", "btnMsg", "btnCancel", "overrideReason", "msgText", "cancelReason"]) {
+      $(id).disabled = !on;
+    }
+  }
+
+  function feed(type, message, urgent) {
+    const box = $("feed");
+    const el = document.createElement("div");
+    el.className = "ev" + (urgent ? " urgent" : "");
+    el.innerHTML = `<time>${new Date().toLocaleTimeString()}</time> <b>${type}</b><br>${message || ""}`;
+    box.prepend(el);
+    while (box.children.length > 60) box.lastChild.remove();
+  }
+
+  // ---------- data ----------
+  async function refresh() {
+    try {
+      const data = await api("/api/operator/trips?scope=" + $("scope").value);
+      trips = data.trips || [];
+      if (selected && !trips.some((t) => t.trip_id === selected)) {
+        selected = null; disconnectSocket(); setActionsEnabled(false);
+      }
+      renderList(); renderDetail(); renderJunctions(); drawMap();
+      $("linkDot").style.background = "#3fb950";
+      $("linkText").textContent = "live · " + new Date().toLocaleTimeString();
+    } catch (err) {
+      $("linkDot").style.background = "#f85149";
+      $("linkText").textContent = "backend unreachable";
+    }
+  }
+
+  function disconnectSocket() {
+    if (socket) { try { socket.close(); } catch (e) {} socket = null; }
+  }
+
+  function connectSocket(tripId) {
+    disconnectSocket();
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    socket = new WebSocket(`${proto}://${location.host}/ws/emergency-trips/${tripId}?token=${encodeURIComponent(token)}`);
+    socket.onmessage = (ev) => {
+      let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      const urgent = ["route_update", "route_cancelled", "operator_message", "incident"].includes(msg.type);
+      feed(msg.type, msg.message || msg.reason || "", urgent);
+      refresh();
+    };
+    socket.onclose = () => { if (selected === tripId) setTimeout(() => { if (selected === tripId) connectSocket(tripId); }, 3000); };
+    socket.onerror = () => {};
+  }
+
+  function select(tripId) {
+    selected = tripId;
+    setActionsEnabled(true);
+    $("feed").innerHTML = "";
+    renderList(); renderDetail(); renderJunctions(); drawMap();
+    connectSocket(tripId);
+  }
+
+  // ---------- actions ----------
+  function act(fn, note) {
+    if (!selected) return Promise.resolve();
+    return fn(selected).then(
+      (out) => { feed(note, out.message || out.reason || "done", true); return refresh(); },
+      (err) => { feed("action failed", err.message, true); },
+    );
+  }
+
+  $("btnApprove").onclick = () => act((id) => api(`/api/operator/trips/${id}/route`,
+    { method: "POST", body: JSON.stringify({ action: "approve" }) }), "route approved");
+  $("btnOverride").onclick = () => act((id) => api(`/api/operator/trips/${id}/route`,
+    { method: "POST", body: JSON.stringify({
+      action: "override",
+      reason: $("overrideReason").value.trim() || "Rerouted by control center",
+      eta_scale: parseFloat($("etaScale").value),
+    }) }), "route override");
+  $("btnMsg").onclick = () => {
+    const text = $("msgText").value.trim();
+    if (!text) { feed("nothing sent", "Type a message for the driver first.", true); return; }
+    act((id) => api(`/api/operator/trips/${id}/message`,
+      { method: "POST", body: JSON.stringify({ text, urgency: "info" }) }), "message sent")
+      .then(() => { $("msgText").value = ""; });
+  };
+  $("btnCancel").onclick = () => {
+    if (!confirm("Cancel this corridor? The driver's trip closes immediately.")) return;
+    act((id) => api(`/api/operator/trips/${id}/cancel`,
+      { method: "POST", body: JSON.stringify({ reason: $("cancelReason").value.trim() }) }), "route cancelled");
+  };
+  $("etaScale").oninput = (e) => { $("etaScaleVal").textContent = parseFloat(e.target.value).toFixed(2); };
+  $("scope").onchange = refresh;
+
+  // ---------- session ----------
+  function signOut() {
+    disconnectSocket();
+    if (timer) { clearInterval(timer); timer = null; }
+    sessionStorage.removeItem("op_token");
+    token = ""; me = null; trips = []; selected = null;
+    $("console").classList.add("hide");
+    $("login").classList.remove("hide");
+  }
+  $("logout").onclick = async () => {
+    try { await api("/api/auth/logout", { method: "POST", body: JSON.stringify({}) }); } catch (e) {}
+    signOut();
+  };
+
+  $("loginForm").onsubmit = async (e) => {
+    e.preventDefault();
+    $("loginError").textContent = "";
+    const form = new FormData(e.target);
+    try {
+      const res = await fetch(API + "/api/auth/login", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: form.get("username"), password: form.get("password") }),
+      });
+      const body = await res.json();
+      if (!res.ok) { $("loginError").textContent = body.detail || "Login failed"; return; }
+      if (body.role !== "central_operator") {
+        $("loginError").textContent = `This console is for operators. Your role is '${body.role}'.`;
+        return;
+      }
+      token = body.access_token;
+      sessionStorage.setItem("op_token", token);
+      me = body;
+      start();
+    } catch (err) {
+      $("loginError").textContent = "Cannot reach the backend: " + err.message;
+    }
+  };
+
+  async function start() {
+    $("login").classList.add("hide");
+    $("console").classList.remove("hide");
+    $("whoami").textContent = `${me.name} · ${me.user_id} · ${me.organization_id}`;
+    // The map was built while #console was display:none, so Leaflet has a 0×0
+    // container until we re-measure it after the console is actually visible.
+    setTimeout(() => map.invalidateSize(), 0);
+    await refresh();
+    if (!timer) timer = setInterval(refresh, 3000);
+  }
+
+  if (token) {
+    api("/api/auth/me").then((u) => {
+      if (u.role !== "central_operator") return signOut();
+      me = { name: u.name, user_id: u.user_id, organization_id: u.organization_id };
+      start();
+    }).catch(signOut);
+  }
+})();
+</script>
+</body>
+</html>

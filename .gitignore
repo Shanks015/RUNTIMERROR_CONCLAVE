@@ -1,0 +1,35 @@
+# Secrets — never commit. Copy to .env and fill in.
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Flutter / Dart build output (build/ alone is ~960 MB)
+driver_app/build/
+driver_app/.dart_tool/
+driver_app/.flutter-plugins
+driver_app/.flutter-plugins-dependencies
+driver_app/android/.gradle/
+driver_app/android/.kotlin/
+driver_app/android/local.properties
+driver_app/android/app/debug/
+driver_app/android/app/profile/
+driver_app/android/app/release/
+**/*.iml
+
+# Editors
+.idea/
+*.iws
+.vscode/
+
+# Runtime logs and check artifacts
+*.log
+backend/dashboard.png
+
+# OS
+Thumbs.db
+.DS_Store
